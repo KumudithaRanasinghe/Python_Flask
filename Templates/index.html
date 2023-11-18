@@ -1,0 +1,25 @@
+<center>
+<div>
+    <h1>Hello World</h1>
+    <p>This is my first webpage!</p>
+    <p>I'm back</p>
+    <h1>My name is {{first_name}}</h1>
+    <p>{{ stuff|safe }}</p>
+    <!-- remove html tags -->
+    <p>{{ stuff|striptags }}</p>
+    <!-- set 1st letter upper case of all words -->
+    <p>{{ stuff|title }}</p>
+    <h3>Favourite Pizza : </h3>
+
+    {% for i in favourite_pizza %}
+        {% if i == 69 %}
+        <li>{{i+100}}</li><br>
+        {% else %}
+        <li>{{i}}</li><br>
+        {% endif %}
+        
+    {% endfor %}
+    
+
+</div>
+</center>
