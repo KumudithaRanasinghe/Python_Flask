@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash
+from flask import Flask, render_template, flash, request
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
@@ -10,14 +10,16 @@ from datetime import datetime
 app = Flask(__name__)
 
 #Add Database
+#Old SQLite DB
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+#New MySQL DB
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/our_users'
+
 
 #Secret Key
 app.config['SECRET_KEY'] = "hello world!"
-#Initialize The Database
-
+#Initialize The Databas
 db = SQLAlchemy(app)
-#db.init_app(app)
 
 #Create Model
 class Users(db.Model):
@@ -35,6 +37,31 @@ class UserForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired()])
     submit = SubmitField("submit")
 
+#Update database record
+@app.route('/update/<int:id>', methods=['GET', 'POST'])
+
+def update(id):
+    form = UserForm()
+    name_to_update = Users.query.get_or_404(id)
+    if request.method == "POST":
+        name_to_update.name = request.form['name']
+        name_to_update.email = request.form['email']
+        try:
+            db.session.commit()
+            flash("User Updated Successfully!")
+            return render_template("update.html",
+                                    form=form,
+                                    name_to_update=name_to_update)
+        except:
+            flash("Error Try Again..!")
+            return render_template("update.html",
+                                    form=form,
+                                    name_to_update=name_to_update)
+        
+    else:
+        return render_template("update.html",
+                                    form=form,
+                                    name_to_update=name_to_update)
 
 #Create a Form Class
 class NamerForm(FlaskForm):
@@ -90,7 +117,7 @@ def page_not_found(e):
 
 #Internal server error
 @app.errorhandler(500)
-def page_not_found(e):
+def internal_server_error(e):
     return render_template("500.html"), 500
 
 #create Name Page
