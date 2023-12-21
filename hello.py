@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash, request
+from flask import Flask, render_template, flash, request, redirect, url_for
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, PasswordField, BooleanField, ValidationError
 from wtforms.validators import DataRequired, EqualTo, Length
@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user, current_user
 
 # Create a Falsk Instance
 app = Flask(__name__)
@@ -23,8 +24,65 @@ app.config['SECRET_KEY'] = "hello world!"
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
+#Flask login stuff
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return Users.query.get(int(user_id))
+
+#create login form
+class LoginForm(FlaskForm):
+    username = StringField("Username", validators=[DataRequired()])
+    password = PasswordField("Password", validators=[DataRequired()])
+    submit = SubmitField("submit")
+
+#Create login page
+@app.route('/login',methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = Users.query.filter_by(username=form.username.data).first()
+        if user:
+            #chech hash
+            if check_password_hash(user.password_hash, form.password.data):
+                login_user(user)
+                flash("login successfully")
+                return redirect(url_for('dashbord'))
+            else:
+                flash("Try again")
+        else:
+             flash("Try again")
+
+    return render_template('login.html', form=form)
+
+#logoput page
+@app.route('/logout', methods=['GET', 'POST'])
+@login_required
+def logout():
+    logout_user()
+    flash("YOu have logged out")
+    return redirect(url_for('login'))
+    
+
+
+#create dashboard page
+@app.route('/dashbord',methods=['GET', 'POST'])
+@login_required
+def dashbord():
+    return render_template('dashbord.html')
+
+
+#Json
+@app.route('/date')
+def get_current_date():
+    return {"date ": datetime.today()}
+
+
 #Create Model
-class Users(db.Model):
+class Users(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(120), nullable=False, unique=True)
@@ -33,6 +91,7 @@ class Users(db.Model):
 
     #Do some password stuff
     password_hash = db.Column(db.String(128))
+    username = db.Column(db.String(20))
 
     @property
     def password(self):
@@ -72,7 +131,8 @@ def delete(id):
                                 our_users=our_user)
     
 class UserForm(FlaskForm):
-    name = StringField(" Name", validators=[DataRequired()])
+    name = StringField("Name", validators=[DataRequired()])
+    username = StringField("UserName", validators=[DataRequired()])
     email = StringField("Email", validators=[DataRequired()])
     favourite_color = StringField("Favourite Color")
     password_hash = PasswordField("Password", validators=[DataRequired(), EqualTo('password_hash2', message='Passwords must match!')])
@@ -107,6 +167,11 @@ def update(id):
                                     name_to_update=name_to_update,
                                     id=id)
 
+class PasswordForm(FlaskForm):
+    email = StringField("What is Your Email", validators=[DataRequired()])
+    password_hash = PasswordField("What is Your Password", validators=[DataRequired()])
+    submit = SubmitField("submit")
+
 #Create a Form Class
 class NamerForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired()])
@@ -140,14 +205,16 @@ def add_user():
         if user is None:
             #hash the password
             hashed_pw = generate_password_hash(form.password_hash.data,)
-            user = Users(name=form.name.data, email=form.email.data, favourite_color=form.favourite_color.data, password_hash=hashed_pw)
+            user = Users(username=form.username.data, name=form.name.data, email=form.email.data, favourite_color=form.favourite_color.data, password_hash=hashed_pw)
             db.session.add(user)
             db.session.commit()
         name = form.name.data
         form.name.data = ''
+        form.username.data = ''
         form.email.data = ''
         form.favourite_color.data = ''
         form.password_hash = ''
+        
         flash("User Added Successfully!")
     our_user = Users.query.order_by(Users.date_added).all()
     return render_template("add_user.html", 
@@ -167,6 +234,35 @@ def page_not_found(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     return render_template("500.html"), 500
+
+#create Password test Page
+@app.route('/test_pw', methods=['GET', 'POST'])
+def test_pw():
+    email = None
+    password = None
+    pw_to_check = None
+    passed = None
+    form = PasswordForm()
+    #Validate Form
+    if form.validate_on_submit():
+        email = form.email.data
+        password = form.password_hash.data
+        form.email.data = ''
+        form.password_hash.data = ''
+
+        #Lookup User by email address
+        
+        pw_to_check =Users.query.filter_by(email=email).first()
+        #chech Hashed password
+        passed = check_password_hash(pw_to_check.password_hash, password)
+
+
+    return render_template("test_pw.html", 
+                           email = email,
+                           password = password,
+                           pw_to_check = pw_to_check,
+                           passed = passed,
+                           form = form)
 
 #create Name Page
 @app.route('/name', methods=['GET', 'POST'])
